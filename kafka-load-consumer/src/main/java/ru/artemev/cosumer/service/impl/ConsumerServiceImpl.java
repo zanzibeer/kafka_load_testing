@@ -28,7 +28,7 @@ public class ConsumerServiceImpl implements ConsumerService {
     try {
       ClientModel clientModel = objectMapper.readValue(message, ClientModel.class);
       // +++ CPU UTILIZATION +++
-      log.info("Received model -> " + clientModel);
+//      log.info("Received model -> " + clientModel);
       ClientEntity clientEntity = clientEntityMapper.toClientEntity(clientModel);
       log.info("Created clientEntity -> " + clientEntity);
       clientRepository.save(clientEntity);
