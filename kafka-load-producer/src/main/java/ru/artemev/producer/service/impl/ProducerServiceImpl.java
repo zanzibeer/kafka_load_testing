@@ -54,7 +54,7 @@ public class ProducerServiceImpl implements ProducerService {
     if (!jsonDirDone.toFile().exists()) {
       jsonDirDone.toFile().mkdir();
     }
-
+    log.info("Waiting files...");
     while (true) {
       List<File> files =
           Arrays.stream(Objects.requireNonNull(jsonDir.toFile().listFiles()))
@@ -65,9 +65,7 @@ public class ProducerServiceImpl implements ProducerService {
 
       File file = files.get(0);
 
-      if(file.length() == 0) continue;
-
-      sendFileToKafka(file);
+      if (file.canRead()) sendFileToKafka(file);
     }
   }
 
