@@ -65,6 +65,8 @@ public class ProducerServiceImpl implements ProducerService {
 
       File file = files.get(0);
 
+      if(file.length() == 0) continue;
+
       sendFileToKafka(file);
     }
   }
