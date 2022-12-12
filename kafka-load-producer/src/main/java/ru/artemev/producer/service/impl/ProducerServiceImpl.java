@@ -94,6 +94,10 @@ public class ProducerServiceImpl implements ProducerService {
 
         log.info("Finish send CSV file");
       }
+      default -> {
+        log.warn("I found an unknown file (" + file.getName() + ") and deleted it)");
+        file.delete();
+      }
     }
   }
 
