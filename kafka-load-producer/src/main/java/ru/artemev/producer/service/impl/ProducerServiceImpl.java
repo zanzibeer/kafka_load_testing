@@ -1,5 +1,6 @@
 package ru.artemev.producer.service.impl;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -127,6 +128,10 @@ public class ProducerServiceImpl implements ProducerService {
                 kafkaTemplate.send(kafkaTopic, UUID.randomUUID().toString(), line);
                 //                log.info("Sent " + line + " to kafka");
               });
+    }  catch (JsonMappingException e) {
+      log.error("Error mapping json...");
+      log.info("I'm moving " + path + " to done dir");
+      moveFileToDoneDir(path);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
