@@ -136,7 +136,11 @@ public class ProducerServiceImpl implements ProducerService {
   private void moveFileToDoneDir(Path src) {
     Path doneDir = Path.of(jsonDirDone.toString() + "/" + src.getFileName());
     try {
-      Files.move(src, doneDir);
+      if (src.toFile().canRead() && doneDir.toFile().canWrite()) {
+        Files.move(src, doneDir);
+      } else {
+        log.warn("I can't read src " + src + " or write to doneDir...");
+      }
     } catch (IOException e) {
       log.error("Exception while moving file: " + e.getMessage());
     }
