@@ -1,6 +1,5 @@
 package ru.artemev.producer.service.impl;
 
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +16,7 @@ import ru.artemev.producer.service.ProducerService;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -28,17 +28,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProducerServiceImpl implements ProducerService {
 
-  @Value("${json.dir.path}")
-  private Path jsonDir;
-
-  @Value("${done.dir.path}")
-  private Path jsonDirDone;
-
-  @Value("${kafka.topic}")
-  private String kafkaTopic;
-
   private final KafkaTemplate<String, ClientModel> kafkaTemplate;
   private final ObjectMapper objectMapper;
+  @Value("${json.dir.path}")
+  private Path jsonDir;
+  @Value("${done.dir.path}")
+  private Path jsonDirDone;
+  @Value("${kafka.topic}")
+  private String kafkaTopic;
 
   @Override
   @EventListener(ApplicationReadyEvent.class)
@@ -49,7 +46,7 @@ public class ProducerServiceImpl implements ProducerService {
     log.info("Get json done dir path " + jsonDirDone);
 
     if (!jsonDir.toFile().exists()) {
-      throw new RuntimeException("File path is not exists");
+      jsonDir.toFile().mkdir();
     }
 
     if (!jsonDirDone.toFile().exists()) {
@@ -128,10 +125,6 @@ public class ProducerServiceImpl implements ProducerService {
                 kafkaTemplate.send(kafkaTopic, UUID.randomUUID().toString(), line);
                 //                log.info("Sent " + line + " to kafka");
               });
-    }  catch (JsonMappingException e) {
-      log.error("Error mapping json...");
-      log.info("I'm moving " + path + " to done dir");
-      moveFileToDoneDir(path);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -141,13 +134,15 @@ public class ProducerServiceImpl implements ProducerService {
   private void moveFileToDoneDir(Path src) {
     Path doneDir = Path.of(jsonDirDone.toString() + "/" + src.getFileName());
     try {
-      if (src.toFile().canRead() && doneDir.toFile().canWrite()) {
-        Files.move(src, doneDir);
+      if (src.toFile().canRead()) {
+        // Перезаписывает файл, если он уже есть в директории
+        Files.move(src, doneDir, StandardCopyOption.REPLACE_EXISTING);
       } else {
         log.warn("I can't read src " + src + " or write to doneDir...");
       }
     } catch (IOException e) {
       log.error("Exception while moving file: " + e.getMessage());
+      e.printStackTrace();
     }
   }
 }
