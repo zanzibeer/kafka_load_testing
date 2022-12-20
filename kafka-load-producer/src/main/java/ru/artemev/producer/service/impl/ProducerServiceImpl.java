@@ -1,6 +1,5 @@
 package ru.artemev.producer.service.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
@@ -10,7 +9,6 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import ru.artemev.producer.model.ClientModel;
 import ru.artemev.producer.service.ProducerService;
 
 import java.io.*;
@@ -22,18 +20,21 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class ProducerServiceImpl implements ProducerService {
 
-  private final KafkaTemplate<String, ClientModel> kafkaTemplate;
-  private final ObjectMapper objectMapper;
+  private final KafkaTemplate<String, String> kafkaTemplate;
+
   @Value("${json.dir.path}")
   private Path jsonDir;
+
   @Value("${done.dir.path}")
   private Path jsonDirDone;
+
   @Value("${kafka.topic}")
   private String kafkaTopic;
 
@@ -57,6 +58,7 @@ public class ProducerServiceImpl implements ProducerService {
       List<File> files =
           Arrays.stream(Objects.requireNonNull(jsonDir.toFile().listFiles()))
               .filter(e -> !e.toString().equals(jsonDirDone.toString()))
+              .filter(e -> !e.isHidden())
               .toList();
 
       if (files.isEmpty()) continue;
@@ -85,14 +87,20 @@ public class ProducerServiceImpl implements ProducerService {
         try {
           Files.delete(file.toPath());
         } catch (IOException e) {
-          throw new RuntimeException(e);
+          log.error("Error deleting " + file.getName());
+          e.printStackTrace();
         }
 
         log.info("Finish send CSV file");
       }
       default -> {
         log.warn("I found an unknown file (" + file.getName() + ") and deleted it)");
-        file.delete();
+        try {
+          Files.delete(file.toPath());
+        } catch (IOException e) {
+          log.error("Error deleting " + file.getName());
+          e.printStackTrace();
+        }
       }
     }
   }
@@ -105,13 +113,14 @@ public class ProducerServiceImpl implements ProducerService {
           new BufferedReader(new InputStreamReader(inputStream))
               .lines()
               .collect(Collectors.joining("\n"));
-      String json = CDL.toJSONArray(csvString).toString().replace("},{", "},\n{");
+      String json = CDL.toJSONArray(csvString).toString().replace("},{", "}\n{");
       Path pathJson =
           Path.of(jsonDirDone + "/" + FilenameUtils.getBaseName(String.valueOf(path)) + ".json");
       Files.writeString(pathJson, json);
       log.info("=== Finish convertCsvToPath");
       return pathJson;
     } catch (IOException e) {
+      e.printStackTrace();
       throw new RuntimeException(e);
     }
   }
@@ -119,13 +128,16 @@ public class ProducerServiceImpl implements ProducerService {
   private void sendLinesFromJsonFile(Path path) {
     log.info("=== Start send lines from " + path.toString());
     try {
-      Arrays.stream(objectMapper.readValue(path.toFile(), ClientModel[].class))
-          .forEach(
-              line -> {
-                kafkaTemplate.send(kafkaTopic, UUID.randomUUID().toString(), line);
-                //                log.info("Sent " + line + " to kafka");
-              });
+      InputStream inputStream = new FileInputStream(path.toFile());
+      Stream<String> clientModelStream =
+          new BufferedReader(new InputStreamReader(inputStream))
+              .lines()
+              .map(e -> e.replace("}, {", "}\n{"))
+              .map(e -> e.replaceAll("[\\[\\]]", ""));
+      clientModelStream.forEach(
+          e -> kafkaTemplate.send(kafkaTopic, UUID.randomUUID().toString(), e));
     } catch (IOException e) {
+      e.printStackTrace();
       throw new RuntimeException(e);
     }
     log.info("Finish sendJsonLines");
